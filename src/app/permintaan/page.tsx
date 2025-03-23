@@ -2,8 +2,10 @@
 
 import ProtectedRoute from "@/components/protectedRoute/protectedRoute";
 import { useAuth } from "@/context/authContext";
+import axios from "axios";
 import { ListRestart, NotebookTabs } from "lucide-react";
 import React, { useState, useEffect } from "react";
+// import { toast } from "react-hot-toast"; // You may need to install this package
 
 type StatusType = {
   label: string;
@@ -21,11 +23,13 @@ const StatusEnum: Record<string, StatusType> = {
 
 interface RequestData {
   no: number;
-  nama: string;
-  golonganDarah: string;
-  jumlahDarah: string;
-  permintaanDibuat: string;
-  permintaanBerakhir: string;
+  id: string;
+  patient_name: string;
+  blood_type: string;
+  quantity: number;
+  blood_bags_fulfilled: number;
+  created_at: string;
+  expiry_date: string;
   permintaanDibuatFormatted: string;
   permintaanBerakhirFormatted: string;
   status: StatusType;
@@ -75,7 +79,7 @@ const parseFormattedDate = (formattedDate: string): string => {
 };
 
 const Permintaan: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const columns = [
     "No",
     "Nama",
@@ -99,50 +103,85 @@ const Permintaan: React.FC = () => {
     permintaanBerakhir: "",
   });
 
-  const rawData = [
-    {
-      no: 1,
-      nama: "John Doe",
-      golonganDarah: "A+",
-      jumlahDarah: "2 Kantong",
-      permintaanDibuat: "2024-03-20",
-      permintaanBerakhir: "2024-03-25",
-      status: StatusEnum.MENUNGGU_KONFIRMASI,
-    },
-    {
-      no: 2,
-      nama: "Jane Smith",
-      golonganDarah: "O-",
-      jumlahDarah: "1 Kantong",
-      permintaanDibuat: "2024-03-21",
-      permintaanBerakhir: "2024-03-26",
-      status: StatusEnum.DITOLAK,
-    },
-    {
-      no: 3,
-      nama: "Michael Johnson",
-      golonganDarah: "B+",
-      jumlahDarah: "3 Kantong",
-      permintaanDibuat: "2024-03-22",
-      permintaanBerakhir: "2024-03-27",
-      status: StatusEnum.DITERIMA,
-    },
-  ];
-
   const [data, setData] = useState<RequestData[]>([]);
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+
+  const fetchRequests = async () => {
+    if (user) {
+      try {
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/bloodReq/partner/${user.id}`
+        );
+
+        console.log("Data fetched:", response.data);
+        const dataResponse = response.data;
+        const formattedData = dataResponse.data.map((item: any) => {
+          let statusKey = item.status; // Asumsikan status dari API berupa string
+
+          // Mapping status 'pending' ke MENUNGGU_KONFIRMASI
+          switch (statusKey) {
+            case "pending":
+              statusKey = "MENUNGGU_KONFIRMASI";
+              break;
+            case "rejected":
+              statusKey = "DITOLAK";
+              break;
+            case "verified":
+              statusKey = "DITERIMA";
+              break;
+            default:
+              break;
+          }
+
+          return {
+            ...item,
+            permintaanDibuatFormatted: formatDate(item.created_at),
+            permintaanBerakhirFormatted: formatDate(item.expiry_date),
+            status: StatusEnum[statusKey] || {
+              label: "Tidak Diketahui",
+              color: "bg-gray-200 text-gray-800",
+            }, // Handle jika status tidak dikenali
+          };
+        });
+
+        setData(formattedData);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        setData([]); // Set empty array in case of error
+      }
+    }
+  };
 
   useEffect(() => {
-    const formattedData = rawData.map((item) => ({
-      ...item,
-      permintaanDibuatFormatted: formatDate(item.permintaanDibuat),
-      permintaanBerakhirFormatted: formatDate(item.permintaanBerakhir),
-    }));
+    console.log(user);
+    fetchRequests();
+  }, [user]); // Tambahkan user sebagai dependency
 
-    setData(formattedData);
-  }, []);
+  const handleValidateRequest = async (requestId: string, status: 'verified' | 'rejected') => {
+    try {
+      // Set loading state for this specific request
+      setLoading(prev => ({ ...prev, [requestId]: true }));
+      const isValidate = status === 'verified';
+      
+      // Send PATCH request to validate endpoint
+      await axios.patch(
+        `${process.env.NEXT_PUBLIC_API_URL}/partners/validate/${requestId}`,
+        { isValidate }
+      );
+      
+      
+      // Refresh the data
+      fetchRequests();
+    } catch (error) {
+      console.error("Error validating request:", error);
+    } finally {
+      // Clear loading state for this request
+      setLoading(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
 
   const filteredData = data.filter((row) => {
-    if (filters.golonganDarah && row.golonganDarah !== filters.golonganDarah) {
+    if (filters.golonganDarah && row.blood_type !== filters.golonganDarah) {
       return false;
     }
 
@@ -155,16 +194,13 @@ const Permintaan: React.FC = () => {
       }
     }
 
-    if (
-      filters.permintaanDibuat &&
-      row.permintaanDibuat < filters.permintaanDibuat
-    ) {
+    if (filters.permintaanDibuat && row.created_at < filters.permintaanDibuat) {
       return false;
     }
 
     if (
       filters.permintaanBerakhir &&
-      row.permintaanBerakhir > filters.permintaanBerakhir
+      row.expiry_date > filters.permintaanBerakhir
     ) {
       return false;
     }
@@ -196,7 +232,7 @@ const Permintaan: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-1">
-            <p className="text-xs text-gray-600">Golongan Darah</p>
+            <p className="text-xs text-gray-600">Status</p>
             <select
               className="border border-gray-300 rounded-xl py-2 px-3 text-sm"
               value={filters.statusKey}
@@ -280,9 +316,9 @@ const Permintaan: React.FC = () => {
                     }`}
                   >
                     <td className="p-4">{row.no}</td>
-                    <td className="p-4">{row.nama}</td>
-                    <td className="p-4">{row.golonganDarah}</td>
-                    <td className="p-4">{row.jumlahDarah}</td>
+                    <td className="p-4">{row.patient_name}</td>
+                    <td className="p-4">{row.blood_type}</td>
+                    <td className="p-4">{row.quantity}</td>
                     <td className="p-4">{row.permintaanDibuatFormatted}</td>
                     <td className="p-4">{row.permintaanBerakhirFormatted}</td>
                     <td className="p-4">
@@ -292,11 +328,30 @@ const Permintaan: React.FC = () => {
                         {row.status.label}
                       </span>
                     </td>
-                    <td className="p-4">
-                      <button className="flex gap-2 items-center bg-secondary hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200">
-                        <NotebookTabs color="white" width={16} height={16} />
-                        <p>Detail</p>
-                      </button>
+                    <td className="p-4 flex gap-2">
+                      {row.status.label === "Menunggu Konfirmasi" && (
+                        <>
+                          <button 
+                            className="flex gap-2 items-center bg-primary hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => handleValidateRequest(row.id, 'rejected')}
+                            disabled={loading[row.id]}
+                          >
+                            <p>{loading[row.id] ? 'Memproses...' : 'Tolak'}</p>
+                          </button>
+                          <button 
+                            className="flex gap-2 items-center bg-green-700 hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => handleValidateRequest(row.id, 'verified')}
+                            disabled={loading[row.id]}
+                          >
+                            <p>{loading[row.id] ? 'Memproses...' : 'Terima'}</p>
+                          </button>
+                        </>
+                      )}
+                      {row.status.label !== "Menunggu Konfirmasi" && (
+                        <span className="text-sm text-gray-500">
+                          Permintaan sudah diproses
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))
