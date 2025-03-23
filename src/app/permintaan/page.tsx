@@ -1,5 +1,7 @@
 "use client";
 
+import ProtectedRoute from "@/components/protectedRoute/protectedRoute";
+import { useAuth } from "@/context/authContext";
 import { ListRestart, NotebookTabs } from "lucide-react";
 import React, { useState, useEffect } from "react";
 
@@ -73,6 +75,7 @@ const parseFormattedDate = (formattedDate: string): string => {
 };
 
 const Permintaan: React.FC = () => {
+  const { user, logout } = useAuth();
   const columns = [
     "No",
     "Nama",
@@ -170,143 +173,145 @@ const Permintaan: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="font-bold text-3xl text-white">Daftar Permintaan</h2>
+    <ProtectedRoute>
+      <div className="flex flex-col gap-6">
+        <h2 className="font-bold text-3xl text-white">Daftar Permintaan</h2>
 
-      {/* Filter Section */}
-      <div className="flex gap-4 flex-wrap bg-gray-100 rounded-xl shadow-md py-3 px-4 items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-gray-600">Golongan Darah</p>
-          <select
-            className="border border-gray-300 rounded-xl py-2 px-3 text-sm"
-            value={filters.golonganDarah}
-            onChange={(e) =>
-              setFilters({ ...filters, golonganDarah: e.target.value })
-            }
-          >
-            <option value="">Pilih Golongan Darah</option>
-            <option value="A+">A+</option>
-            <option value="O-">O-</option>
-            <option value="B+">B+</option>
-          </select>
-        </div>
+        {/* Filter Section */}
+        <div className="flex gap-4 flex-wrap bg-gray-100 rounded-xl shadow-md py-3 px-4 items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-gray-600">Golongan Darah</p>
+            <select
+              className="border border-gray-300 rounded-xl py-2 px-3 text-sm"
+              value={filters.golonganDarah}
+              onChange={(e) =>
+                setFilters({ ...filters, golonganDarah: e.target.value })
+              }
+            >
+              <option value="">Pilih Golongan Darah</option>
+              <option value="A+">A+</option>
+              <option value="O-">O-</option>
+              <option value="B+">B+</option>
+            </select>
+          </div>
 
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-gray-600">Golongan Darah</p>
-          <select
-            className="border border-gray-300 rounded-xl py-2 px-3 text-sm"
-            value={filters.statusKey}
-            onChange={(e) =>
-              setFilters({ ...filters, statusKey: e.target.value })
-            }
-          >
-            <option value="">Pilih Status</option>
-            {Object.keys(StatusEnum).map((key) => (
-              <option key={key} value={key}>
-                {StatusEnum[key].label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col text-sm gap-1">
-          <label className="text-xs text-gray-600">Permintaan Dibuat</label>
-          <input
-            type="date"
-            className="border border-gray-300 rounded-xl p-2"
-            value={filters.permintaanDibuat}
-            onChange={(e) =>
-              setFilters({ ...filters, permintaanDibuat: e.target.value })
-            }
-          />
-        </div>
-
-        <div className="flex flex-col text-sm gap-1">
-          <label className="text-xs text-gray-600">Permintaan Berakhir</label>
-          <input
-            type="date"
-            className="border border-gray-300 rounded-xl p-2"
-            value={filters.permintaanBerakhir}
-            onChange={(e) =>
-              setFilters({ ...filters, permintaanBerakhir: e.target.value })
-            }
-          />
-        </div>
-
-        <button
-          className="bg-blue-500 cursor-pointer text-sm text-white px-4 py-2 rounded-xl hover:bg-blue-600 flex gap-2 items-center"
-          onClick={() =>
-            setFilters({
-              golonganDarah: "",
-              statusKey: "",
-              permintaanDibuat: "",
-              permintaanBerakhir: "",
-            })
-          }
-        >
-          <ListRestart color="white" width={16} height={16} />
-          <p>Reset Filter</p>
-        </button>
-      </div>
-
-      {/* Table Section */}
-      <div className="w-full h-full rounded-2xl overflow-hidden shadow-lg">
-        <table className="table-auto w-full border-collapse bg-white">
-          <thead className="bg-gray-100 rounded-t-2xl">
-            <tr className="border-b border-gray-300">
-              {columns.map((col, index) => (
-                <th
-                  key={index}
-                  className="px-4 py-6 text-left first:rounded-tl-2xl last:rounded-tr-2xl"
-                >
-                  {col}
-                </th>
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-gray-600">Golongan Darah</p>
+            <select
+              className="border border-gray-300 rounded-xl py-2 px-3 text-sm"
+              value={filters.statusKey}
+              onChange={(e) =>
+                setFilters({ ...filters, statusKey: e.target.value })
+              }
+            >
+              <option value="">Pilih Status</option>
+              {Object.keys(StatusEnum).map((key) => (
+                <option key={key} value={key}>
+                  {StatusEnum[key].label}
+                </option>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredData.length > 0 ? (
-              filteredData.map((row, index) => (
-                <tr
-                  key={index}
-                  className={`border-b border-gray-300 ${
-                    index === filteredData.length - 1
-                      ? "last:rounded-b-2xl"
-                      : ""
-                  }`}
-                >
-                  <td className="p-4">{row.no}</td>
-                  <td className="p-4">{row.nama}</td>
-                  <td className="p-4">{row.golonganDarah}</td>
-                  <td className="p-4">{row.jumlahDarah}</td>
-                  <td className="p-4">{row.permintaanDibuatFormatted}</td>
-                  <td className="p-4">{row.permintaanBerakhirFormatted}</td>
-                  <td className="p-4">
-                    <span
-                      className={`px-3 py-1 rounded-xl text-sm font-medium ${row.status.color}`}
-                    >
-                      {row.status.label}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <button className="flex gap-2 items-center bg-secondary hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200">
-                      <NotebookTabs color="white" width={16} height={16} />
-                      <p>Detail</p>
-                    </button>
+            </select>
+          </div>
+
+          <div className="flex flex-col text-sm gap-1">
+            <label className="text-xs text-gray-600">Permintaan Dibuat</label>
+            <input
+              type="date"
+              className="border border-gray-300 rounded-xl p-2"
+              value={filters.permintaanDibuat}
+              onChange={(e) =>
+                setFilters({ ...filters, permintaanDibuat: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="flex flex-col text-sm gap-1">
+            <label className="text-xs text-gray-600">Permintaan Berakhir</label>
+            <input
+              type="date"
+              className="border border-gray-300 rounded-xl p-2"
+              value={filters.permintaanBerakhir}
+              onChange={(e) =>
+                setFilters({ ...filters, permintaanBerakhir: e.target.value })
+              }
+            />
+          </div>
+
+          <button
+            className="bg-blue-500 cursor-pointer text-sm text-white px-4 py-2 rounded-xl hover:bg-blue-600 flex gap-2 items-center"
+            onClick={() =>
+              setFilters({
+                golonganDarah: "",
+                statusKey: "",
+                permintaanDibuat: "",
+                permintaanBerakhir: "",
+              })
+            }
+          >
+            <ListRestart color="white" width={16} height={16} />
+            <p>Reset Filter</p>
+          </button>
+        </div>
+
+        {/* Table Section */}
+        <div className="w-full h-full rounded-2xl overflow-hidden shadow-lg">
+          <table className="table-auto w-full border-collapse bg-white">
+            <thead className="bg-gray-100 rounded-t-2xl">
+              <tr className="border-b border-gray-300">
+                {columns.map((col, index) => (
+                  <th
+                    key={index}
+                    className="px-4 py-6 text-left first:rounded-tl-2xl last:rounded-tr-2xl"
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredData.length > 0 ? (
+                filteredData.map((row, index) => (
+                  <tr
+                    key={index}
+                    className={`border-b border-gray-300 ${
+                      index === filteredData.length - 1
+                        ? "last:rounded-b-2xl"
+                        : ""
+                    }`}
+                  >
+                    <td className="p-4">{row.no}</td>
+                    <td className="p-4">{row.nama}</td>
+                    <td className="p-4">{row.golonganDarah}</td>
+                    <td className="p-4">{row.jumlahDarah}</td>
+                    <td className="p-4">{row.permintaanDibuatFormatted}</td>
+                    <td className="p-4">{row.permintaanBerakhirFormatted}</td>
+                    <td className="p-4">
+                      <span
+                        className={`px-3 py-1 rounded-xl text-sm font-medium ${row.status.color}`}
+                      >
+                        {row.status.label}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <button className="flex gap-2 items-center bg-secondary hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200">
+                        <NotebookTabs color="white" width={16} height={16} />
+                        <p>Detail</p>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} className="p-4 text-center text-gray-500">
+                    Tidak ada data yang sesuai dengan filter
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={8} className="p-4 text-center text-gray-500">
-                  Tidak ada data yang sesuai dengan filter
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 

@@ -8,6 +8,7 @@ import { Header } from "@/components/header/header";
 import { Notif } from "@/components/notif/notif";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import MainLayout from "@/components/layout/mainLayout";
+import { AuthProvider } from "@/context/authContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,18 +37,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <SidebarProvider>
-        <NotifProvider>
-          <body
-            className={`${dmSans.className} antialiased bg-primary pr-8`}
-          >
-            <Header />
-            <Notif />
-            <Sidebar />
-            <MainLayout>{children}</MainLayout>
-          </body>
-        </NotifProvider>
-      </SidebarProvider>
+      <AuthProvider>
+        <SidebarProvider>
+          <NotifProvider>
+            <body className={`${dmSans.className} antialiased bg-primary pr-8`}>
+              <Header />
+              <Notif />
+              <Sidebar />
+              <MainLayout>{children}</MainLayout>
+            </body>
+          </NotifProvider>
+        </SidebarProvider>
+      </AuthProvider>
     </html>
   );
 }

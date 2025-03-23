@@ -10,8 +10,7 @@ import { useSidebar } from "@/context/sidebarContext"; // Import context
 
 export const Sidebar = () => {
   const pathname = usePathname();
-  const { isShowSidebar } = useSidebar(); // Ambil state dari context
-
+  const { isShowSidebar } = useSidebar();
   const menu = [
     {
       name: "Dashboard",
@@ -34,6 +33,10 @@ export const Sidebar = () => {
     },
   ];
 
+  if (pathname === "/login") {
+    return null;
+  }
+  
   return (
     <div className="fixed left-0 h-full">
       <div
