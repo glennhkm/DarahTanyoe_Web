@@ -3,9 +3,8 @@
 import ProtectedRoute from "@/components/protectedRoute/protectedRoute";
 import { useAuth } from "@/context/authContext";
 import axios from "axios";
-import { ListRestart, NotebookTabs } from "lucide-react";
+import { ListRestart, NotebookTabs, CheckCircle, XCircle, CheckSquare } from "lucide-react";
 import React, { useState, useEffect } from "react";
-// import { toast } from "react-hot-toast"; // You may need to install this package
 
 type StatusType = {
   label: string;
@@ -17,8 +16,22 @@ const StatusEnum: Record<string, StatusType> = {
     label: "Menunggu Konfirmasi",
     color: "bg-yellow-200 text-yellow-800",
   },
-  DITOLAK: { label: "Ditolak", color: "bg-red-200 text-red-800" },
-  DITERIMA: { label: "Diterima", color: "bg-green-200 text-green-800" },
+  DITOLAK: {
+    label: "Ditolak",
+    color: "bg-red-200 text-red-800",
+  },
+  DITERIMA: {
+    label: "Diterima",
+    color: "bg-green-200 text-green-800",
+  },
+  KANTONG_SIAP: {
+    label: "Kantong Siap",
+    color: "bg-blue-200 text-blue-800",
+  },
+  SELESAI: {
+    label: "Selesai",
+    color: "bg-gray-200 text-gray-800",
+  },
 };
 
 interface RequestData {
@@ -33,6 +46,7 @@ interface RequestData {
   permintaanDibuatFormatted: string;
   permintaanBerakhirFormatted: string;
   status: StatusType;
+  unique_code_verified?: boolean; // New field to track if unique code is verified
 }
 
 const formatDate = (dateString: string): string => {
@@ -105,6 +119,8 @@ const Permintaan: React.FC = () => {
 
   const [data, setData] = useState<RequestData[]>([]);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [showUniqueCodeInput, setShowUniqueCodeInput] = useState<string | null>(null);
+  const [uniqueCode, setUniqueCode] = useState<string>("");
 
   const fetchRequests = async () => {
     if (user) {
@@ -113,21 +129,25 @@ const Permintaan: React.FC = () => {
           `${process.env.NEXT_PUBLIC_API_URL}/bloodReq/partner/${user.id}`
         );
 
-        console.log("Data fetched:", response.data);
         const dataResponse = response.data;
         const formattedData = dataResponse.data.map((item: any) => {
-          let statusKey = item.status; // Asumsikan status dari API berupa string
+          let statusKey = item.status;
 
-          // Mapping status 'pending' ke MENUNGGU_KONFIRMASI
           switch (statusKey) {
             case "pending":
               statusKey = "MENUNGGU_KONFIRMASI";
               break;
-            case "rejected":
+            case "cancelled":
               statusKey = "DITOLAK";
               break;
-            case "verified":
+            case "confirmed":
               statusKey = "DITERIMA";
+              break;
+            case "ready":
+              statusKey = "KANTONG_SIAP";
+              break;
+            case "completed":
+              statusKey = "SELESAI";
               break;
             default:
               break;
@@ -140,43 +160,95 @@ const Permintaan: React.FC = () => {
             status: StatusEnum[statusKey] || {
               label: "Tidak Diketahui",
               color: "bg-gray-200 text-gray-800",
-            }, // Handle jika status tidak dikenali
+            },
+            unique_code_verified: item.unique_code_verified || false,
           };
         });
 
         setData(formattedData);
       } catch (error) {
         console.error("Error fetching data:", error);
-        setData([]); // Set empty array in case of error
+        setData([]);
       }
     }
   };
 
   useEffect(() => {
-    console.log(user);
     fetchRequests();
-  }, [user]); // Tambahkan user sebagai dependency
+  }, [user]);
 
-  const handleValidateRequest = async (requestId: string, status: 'verified' | 'rejected') => {
+  const handleValidateRequest = async (
+    requestId: string,
+    status: "verified" | "rejected"
+  ) => {
     try {
-      // Set loading state for this specific request
-      setLoading(prev => ({ ...prev, [requestId]: true }));
-      const isValidate = status === 'verified';
-      
-      // Send PATCH request to validate endpoint
+      setLoading((prev) => ({ ...prev, [requestId]: true }));
+
       await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL}/partners/validate/${requestId}`,
-        { isValidate }
+        `${process.env.NEXT_PUBLIC_API_URL}/partners/confirm/${requestId}`,
+        { status }
       );
-      
-      
-      // Refresh the data
+
       fetchRequests();
     } catch (error) {
       console.error("Error validating request:", error);
     } finally {
-      // Clear loading state for this request
-      setLoading(prev => ({ ...prev, [requestId]: false }));
+      setLoading((prev) => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  const handleVerifyUniqueCode = async (requestId: string) => {
+    try {
+      setLoading((prev) => ({ ...prev, [requestId]: true }));
+
+      // console.log("Verifying unique code:", uniqueCode);
+      // console.log(process.env.NEXT_PUBLIC_API_URL);
+      // console.log(`${process.env.NEXT_PUBLIC_API_URL}/bloodReq/verifyUniqueCode/${requestId}`)
+
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/bloodReq/verifyUniqueCode/${requestId}`,
+        { unique_code: uniqueCode }
+      );
+
+      console.log("Response:", response.data);
+
+      if (response.data.status == "SUCCESS") {
+        // Update the local data to mark this request as verified
+        setData(prevData => 
+          prevData.map(item => 
+            item.id === requestId 
+              ? { ...item, unique_code_verified: true } 
+              : item
+          )
+        );
+        
+        setShowUniqueCodeInput(null);
+        setUniqueCode("");
+        // toast.success("Unique code verified successfully"); // Uncomment if using toast
+      }
+    } catch (error) {
+      console.error("Error verifying unique code:", error);
+      // toast.error("Failed to verify unique code"); // Uncomment if using toast
+    } finally {
+      setLoading((prev) => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  const handleCompleteRequest = async (requestId: string) => {
+    try {
+      setLoading((prev) => ({ ...prev, [requestId]: true }));
+
+      await axios.patch(
+        `${process.env.NEXT_PUBLIC_API_URL}/bloodReq/status/${requestId}`,
+        { status: "completed" }
+      );
+
+      fetchRequests();
+    } catch (error) {
+      console.error("Error completing request:", error);
+      // toast.error("Failed to complete request"); // Uncomment if using toast
+    } finally {
+      setLoading((prev) => ({ ...prev, [requestId]: false }));
     }
   };
 
@@ -331,27 +403,88 @@ const Permintaan: React.FC = () => {
                     <td className="p-4 flex gap-2">
                       {row.status.label === "Menunggu Konfirmasi" && (
                         <>
-                          <button 
-                            className="flex gap-2 items-center bg-primary hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => handleValidateRequest(row.id, 'rejected')}
+                          <button
+                            className="flex gap-2 items-center bg-red-800 hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() =>
+                              handleValidateRequest(row.id, "rejected")
+                            }
                             disabled={loading[row.id]}
                           >
-                            <p>{loading[row.id] ? 'Memproses...' : 'Tolak'}</p>
+                            <XCircle width={16} height={16} />
+                            <p>{loading[row.id] ? "Memproses..." : "Tolak"}</p>
                           </button>
-                          <button 
+                          <button
                             className="flex gap-2 items-center bg-green-700 hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => handleValidateRequest(row.id, 'verified')}
+                            onClick={() =>
+                              handleValidateRequest(row.id, "verified")
+                            }
                             disabled={loading[row.id]}
                           >
-                            <p>{loading[row.id] ? 'Memproses...' : 'Terima'}</p>
+                            <CheckCircle width={16} height={16} />
+                            <p>{loading[row.id] ? "Memproses..." : "Terima"}</p>
                           </button>
                         </>
                       )}
-                      {row.status.label !== "Menunggu Konfirmasi" && (
-                        <span className="text-sm text-gray-500">
-                          Permintaan sudah diproses
-                        </span>
+                      {row.status.label === "Diterima" && (
+                        <>
+                          <button
+                            className="flex gap-2 items-center bg-blue-800 hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200"
+                            onClick={() => setShowUniqueCodeInput(row.id)}
+                          >
+                            <CheckCircle width={16} height={16} />
+                            <p>Verifikasi Kode</p>
+                          </button>
+                          <button
+                            className="flex gap-2 items-center bg-red-800 hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() =>
+                              handleValidateRequest(row.id, "rejected")
+                            }
+                            disabled={loading[row.id]}
+                          >
+                            <XCircle width={16} height={16} />
+                            <p>{loading[row.id] ? "Memproses..." : "Batalkan"}</p>
+                          </button>
+                        </>
                       )}
+                      {row.status.label === "Kantong Siap" && (
+                        <>
+                          {row.unique_code_verified ? (
+                            <button
+                              className="flex gap-2 items-center bg-green-700 hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => handleCompleteRequest(row.id)}
+                              disabled={loading[row.id]}
+                            >
+                              <CheckSquare width={16} height={16} />
+                              <p>{loading[row.id] ? "Memproses..." : "Selesai"}</p>
+                            </button>
+                          ) : (
+                            <button
+                              className="flex gap-2 items-center bg-blue-800 hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200"
+                              onClick={() => setShowUniqueCodeInput(row.id)}
+                            >
+                              <CheckCircle width={16} height={16} />
+                              <p>Verifikasi Kode</p>
+                            </button>
+                          )}
+                          <button
+                            className="flex gap-2 items-center bg-red-800 hover:scale-105 text-white text-sm py-2 px-4 rounded-xl cursor-pointer duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() =>
+                              handleValidateRequest(row.id, "rejected")
+                            }
+                            disabled={loading[row.id]}
+                          >
+                            <XCircle width={16} height={16} />
+                            <p>{loading[row.id] ? "Memproses..." : "Batalkan"}</p>
+                          </button>
+                        </>
+                      )}
+                      {row.status.label !== "Menunggu Konfirmasi" &&
+                        row.status.label !== "Diterima" &&
+                        row.status.label !== "Kantong Siap" && (
+                          <span className="text-sm text-gray-500">
+                            Permintaan sudah diproses
+                          </span>
+                        )}
                     </td>
                   </tr>
                 ))
@@ -365,6 +498,42 @@ const Permintaan: React.FC = () => {
             </tbody>
           </table>
         </div>
+        
+        {/* Centered Modal for Unique Code Input */}
+        {showUniqueCodeInput && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+            <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full">
+              <h3 className="text-lg font-semibold mb-4">Verifikasi Kode Unik</h3>
+              <div className="flex flex-col gap-4">
+                <input
+                  type="text"
+                  value={uniqueCode}
+                  onChange={(e) => setUniqueCode(e.target.value)}
+                  placeholder="Masukkan kode unik"
+                  className="border border-gray-300 rounded-xl p-3 text-sm w-full"
+                />
+                <div className="flex gap-2 justify-end">
+                  <button
+                    className="bg-gray-500 text-white text-sm py-2 px-4 rounded-xl hover:bg-gray-600"
+                    onClick={() => {
+                      setShowUniqueCodeInput(null);
+                      setUniqueCode("");
+                    }}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    className="bg-green-700 text-white text-sm py-2 px-4 rounded-xl hover:bg-green-800 disabled:opacity-50"
+                    onClick={() => handleVerifyUniqueCode(showUniqueCodeInput)}
+                    disabled={loading[showUniqueCodeInput] || !uniqueCode}
+                  >
+                    {loading[showUniqueCodeInput] ? "Memproses..." : "Verifikasi"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ProtectedRoute>
   );
